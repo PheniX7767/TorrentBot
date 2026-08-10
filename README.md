@@ -34,7 +34,7 @@ mkdir -p /var/lib/torrent-bot/{downloads,bot-api,qbit-config}
 #   git clone <url> /opt/telegram-torrent-bot
 cd /opt/telegram-torrent-bot   # или путь к клону
 
-cp .env.example .env
+cp env.example .env
 nano .env   # заполните BOT_TOKEN, ALLOWED_USER_IDS, TELEGRAM_API_ID, TELEGRAM_API_HASH
 ```
 
