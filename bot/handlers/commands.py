@@ -21,10 +21,10 @@ def _uid(message: Message) -> int:
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
     await message.answer(
-        "Привет! Я скачаю торрент или видео с YouTube на VPS и пришлю файлы сюда.\n\n"
+        "Привет! Я скачаю торрент или ссылку на видео/пост на VPS и пришлю файлы сюда.\n\n"
         "Пришлите:\n"
         "• <b>magnet</b>-ссылку или файл <code>.torrent</code>\n"
-        "• ссылку на <b>YouTube</b>\n\n"
+        "• ссылку на видео или пост (YouTube, Instagram, TikTok и другие)\n\n"
         "Команды:\n"
         "/status — текущая задача\n"
         "/cancel — отменить задачу\n"

@@ -3,3 +3,4 @@ aiohttp>=3.9,<4
 pydantic-settings>=2.5,<3
 qbittorrent-api>=2024.12,<2026
 yt-dlp>=2025.1.0
+curl-cffi>=0.7,<1

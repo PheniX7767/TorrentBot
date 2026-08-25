@@ -1,6 +1,6 @@
-# Telegram torrent + YouTube bot
+# Telegram torrent + yt-dlp bot
 
-Личный Telegram-бот: принимает magnet / `.torrent` / ссылку YouTube, качает на VPS и отправляет файлы обратно в чат через **локальный Bot API** (до ~2 ГБ на файл).
+Личный Telegram-бот: принимает magnet / `.torrent` / ссылку на видео или пост (YouTube, Instagram, TikTok и другие сайты с именным экстрактором yt-dlp), качает на VPS и отправляет файлы обратно в чат через **локальный Bot API** (до ~2 ГБ на файл).
 
 ## Состав
 
@@ -29,7 +29,7 @@
 curl -fsSL https://get.docker.com | sh
 
 # Данные и проект
-mkdir -p /var/lib/torrent-bot/{downloads,bot-api,qbit-config}
+mkdir -p /var/lib/torrent-bot/{downloads,bot-api,qbit-config,cookies}
 # скопируйте этот репозиторий, например:
 #   git clone <url> /opt/telegram-torrent-bot
 cd /opt/telegram-torrent-bot   # или путь к клону
@@ -64,7 +64,7 @@ ssh -L 8080:127.0.0.1:8080 root@YOUR_VPS
 
 ```bash
 # права для qBittorrent (PUID/PGID=1000 по умолчанию) — иначе состояние error при записи
-mkdir -p /var/lib/torrent-bot/downloads
+mkdir -p /var/lib/torrent-bot/{downloads,cookies}
 chown -R 1000:1000 /var/lib/torrent-bot/downloads
 
 # в .env обязательно: TELEGRAM_LOCAL=True  (иначе лимит ~50 МБ)
@@ -76,14 +76,29 @@ docker compose exec telegram-bot-api ps aux
 docker compose logs -f bot
 ```
 
-В Telegram: `/start` → отправьте тестовый magnet или `.torrent`.
+В Telegram: `/start` → отправьте тестовый magnet, `.torrent` или ссылку на видео/пост.
+
+### Cookies (Instagram, TikTok и др.)
+
+Многие сайты требуют авторизованную сессию. Опционально положите Netscape `cookies.txt` на хост:
+
+```bash
+# экспорт из браузера (расширение вроде «Get cookies.txt LOCALLY») → Netscape format
+cp ~/cookies.txt /var/lib/torrent-bot/cookies/cookies.txt
+chmod 600 /var/lib/torrent-bot/cookies/cookies.txt
+```
+
+Путь в контейнере по умолчанию: `/cookies/cookies.txt` (переопределяется `YTDLP_COOKIES_FILE`).  
+Файл — сессия аккаунта: не коммитьте его в git и не присылайте в Telegram.
 
 ## Поведение
 
 - Доступ только у пользователей из `ALLOWED_USER_IDS` (через запятую)
 - Одна активная задача; новая ссылка при занятости → отказ (`/cancel`)
 - Торрент: выбор файлов кнопками; качаются только выбранные
-- YouTube: выбор качества (лучшее / 1080 / 720 / 480 / mp3)
+- Ссылки (yt-dlp): именные экстракторы (не Generic); выбор качества, если есть видео (лучшее / 1080 / 720 / 480 / mp3); только фото — сразу скачивание
+- Карусели одного поста: Instagram / TikTok / X; плейлисты, каналы и профили — отказ
+- Прямые трансляции — отказ
 - Лимиты: выбранное **> 20 ГБ** или свободно **< 2 ГБ** → отказ
 - Файлы **> ~1900 МБ** режутся на zip-части и шлются подряд
 - После успешной отправки файлы с диска удаляются; «зависшее» — через 24 часа
@@ -93,7 +108,7 @@ docker compose logs -f bot
 
 ## Переменные окружения
 
-См. [`.env.example`](.env.example). Важные:
+См. [`env.example`](env.example). Важные:
 
 | Переменная | Описание |
 |------------|----------|
@@ -103,6 +118,7 @@ docker compose logs -f bot
 | `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` | Для локального Bot API |
 | `QBITTORRENT_PASSWORD` | Пароль WebUI |
 | `DATA_DIR` | Каталог данных на хосте (по умолчанию `/var/lib/torrent-bot`) |
+| `YTDLP_COOKIES_FILE` | Путь к Netscape cookies в контейнере (по умолчанию `/cookies/cookies.txt`) |
 | `MAX_SELECTED_BYTES` | Потолок выбранного (20 ГиБ) |
 | `MIN_FREE_BYTES` | Минимум свободного места (2 ГиБ) |
 
@@ -113,7 +129,7 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
+cp env.example .env
 # укажите реальные URL, если сервисы уже запущены
 python -m bot.main
 ```

@@ -27,15 +27,15 @@ class TorrentFileInfo:
 @dataclass
 class Job:
     state: JobState = JobState.IDLE
-    kind: str = "torrent"  # torrent | youtube
+    kind: str = "torrent"  # torrent | ytdlp
     user_id: int | None = None
     chat_id: int | None = None
     progress_message_id: int | None = None
     picker_message_id: int | None = None
     torrent_hash: str | None = None
     torrent_name: str = ""
-    youtube_url: str | None = None
-    youtube_format: str | None = None
+    source_url: str | None = None
+    media_format: str | None = None
     files: list[TorrentFileInfo] = field(default_factory=list)
     selected: set[int] = field(default_factory=set)
     page: int = 0
@@ -59,8 +59,8 @@ class Job:
     def summary(self) -> str:
         if self.state == JobState.IDLE:
             return "Нет активной задачи."
-        label = "YouTube" if self.kind == "youtube" else "Раздача"
-        name = self.torrent_name or self.youtube_url or self.torrent_hash or "—"
+        label = "Ссылка" if self.kind == "ytdlp" else "Раздача"
+        name = self.torrent_name or self.source_url or self.torrent_hash or "—"
         parts = [
             f"Статус: <b>{self.state.value}</b>",
             f"Тип: {self.kind}",

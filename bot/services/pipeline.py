@@ -21,7 +21,7 @@ from bot.services.delivery import (
 )
 from bot.services.jobs import JobState, job_manager
 from bot.services.qbittorrent import QBittorrentService
-from bot.services.youtube import YoutubeCancelled, download_youtube
+from bot.services.ytdlp import YtdlpCancelled, download_media
 
 
 logger = logging.getLogger(__name__)
@@ -71,15 +71,15 @@ class Pipeline:
             name=f"download-job-{user_id}",
         )
 
-    async def start_youtube_download(self, user_id: int) -> None:
+    async def start_ytdlp_download(self, user_id: int) -> None:
         existing = self._download_tasks.get(user_id)
         if existing and not existing.done():
             return
         event = self._cancel_event(user_id)
         event.clear()
         self._download_tasks[user_id] = asyncio.create_task(
-            self._run_youtube(user_id),
-            name=f"youtube-job-{user_id}",
+            self._run_ytdlp(user_id),
+            name=f"ytdlp-job-{user_id}",
         )
 
     async def request_cancel(self, user_id: int) -> None:
@@ -227,22 +227,23 @@ class Pipeline:
         finally:
             self._download_tasks.pop(user_id, None)
 
-    async def _run_youtube(self, user_id: int) -> None:
+    async def _run_ytdlp(self, user_id: int) -> None:
         job = job_manager.get(user_id)
-        assert job.kind == "youtube" and job.chat_id and job.save_path and job.youtube_url
+        assert job.kind == "ytdlp" and job.chat_id and job.save_path and job.source_url
         chat_id = job.chat_id
         save_path = Path(job.save_path)
-        url = job.youtube_url
-        fmt = job.youtube_format or "best"
+        url = job.source_url
+        fmt = job.media_format or "best"
         cancel = self._cancel_event(user_id)
 
         try:
             job.state = JobState.DOWNLOADING
             job.touch()
-            progress_msg = await self.bot.send_message(chat_id, "Скачиваю с YouTube…")
-            job.progress_message_id = progress_msg.message_id
+            if job.progress_message_id is None:
+                progress_msg = await self.bot.send_message(chat_id, "Скачиваю…")
+                job.progress_message_id = progress_msg.message_id
 
-            progress_state: dict[str, str] = {"text": "Скачиваю с YouTube…"}
+            progress_state: dict[str, str] = {"text": "Скачиваю…"}
 
             def cancel_check() -> bool:
                 return cancel.is_set()
@@ -250,25 +251,26 @@ class Pipeline:
             def progress_cb(d: dict) -> None:
                 if d.get("status") == "downloading":
                     progress_state["text"] = (
-                        f"<b>YouTube</b>: {_esc(job.torrent_name or url)}\n"
+                        f"{_esc(job.torrent_name or url)}\n"
                         f"Прогресс: {d.get('_percent_str', '—').strip()}\n"
                         f"Скорость: {d.get('_speed_str', '—').strip()}\n"
                         f"ETA: {d.get('_eta_str', '—').strip()}"
                     )
                 elif d.get("status") == "finished":
                     progress_state["text"] = (
-                        f"<b>YouTube</b>: {_esc(job.torrent_name or url)}\n"
+                        f"{_esc(job.torrent_name or url)}\n"
                         "Скачивание завершено, обрабатываю…"
                     )
 
             download_task = asyncio.create_task(
                 asyncio.to_thread(
-                    download_youtube,
+                    download_media,
                     url,
                     save_path,
                     fmt,
                     cancel_check,
                     progress_cb,
+                    self.settings.ytdlp_cookies_file,
                 )
             )
 
@@ -287,8 +289,8 @@ class Pipeline:
 
             try:
                 paths = await download_task
-            except YoutubeCancelled:
-                await self.bot.send_message(chat_id, "Загрузка YouTube отменена.")
+            except YtdlpCancelled:
+                await self.bot.send_message(chat_id, "Загрузка отменена.")
                 job_manager.reset(user_id)
                 return
 
@@ -318,7 +320,7 @@ class Pipeline:
                 self.bot,
                 chat_id,
                 sendables,
-                caption_prefix=job.torrent_name[:100] if job.torrent_name else "YouTube",
+                caption_prefix=job.torrent_name[:100] if job.torrent_name else "",
             )
 
             await cleanup_paths(sendables)
@@ -334,7 +336,7 @@ class Pipeline:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.exception("YouTube job failed for user %s", user_id)
+            logger.exception("yt-dlp job failed for user %s", user_id)
             job.state = JobState.ERROR
             job.error = str(exc)
             job.touch()
@@ -343,7 +345,7 @@ class Pipeline:
             if job.chat_id:
                 await self.bot.send_message(
                     job.chat_id,
-                    f"Ошибка YouTube: {_esc(str(exc))}\n"
+                    f"Ошибка: {_esc(str(exc))}\n"
                     "Используйте /cancel или /clean при необходимости.",
                 )
             job_manager.reset(user_id)

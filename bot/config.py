@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     downloads_dir: str = "/downloads"
     puid: int = 1000
     pgid: int = 1000
+    ytdlp_cookies_file: str = "/cookies/cookies.txt"
 
     max_selected_bytes: int = 20 * 1024**3
     min_free_bytes: int = 2 * 1024**3

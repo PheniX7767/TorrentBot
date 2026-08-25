@@ -8,7 +8,7 @@ from bot.keyboards.files import FILES_PER_PAGE, files_keyboard, picker_text
 from bot.services.delivery import ensure_limits, format_size
 from bot.services.jobs import JobState, job_manager
 from bot.services.pipeline import Pipeline
-from bot.services.youtube import FORMAT_MAP
+from bot.services.ytdlp import FORMAT_MAP
 
 
 router = Router(name="callbacks")
@@ -25,13 +25,13 @@ async def on_noop(query: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.startswith("yt:"))
-async def on_youtube_picker(
+async def on_quality_picker(
     query: CallbackQuery,
     pipeline: Pipeline,
 ) -> None:
     user_id = _uid(query)
     job = job_manager.get(user_id)
-    if job.kind != "youtube" or job.state != JobState.SELECTING:
+    if job.kind != "ytdlp" or job.state != JobState.SELECTING:
         await query.answer("Сейчас выбор качества недоступен", show_alert=True)
         return
     if query.message and job.picker_message_id and query.message.message_id != job.picker_message_id:
@@ -54,7 +54,7 @@ async def on_youtube_picker(
         if fmt not in FORMAT_MAP:
             await query.answer("Неизвестный формат", show_alert=True)
             return
-        job.youtube_format = fmt
+        job.media_format = fmt
         job.touch()
         label = {
             "best": "лучшее",
@@ -65,10 +65,10 @@ async def on_youtube_picker(
         }.get(fmt, fmt)
         if query.message:
             await query.message.edit_text(
-                f"Скачиваю с YouTube ({label}):\n{job.torrent_name}"
+                f"Скачиваю ({label}):\n{job.torrent_name}"
             )
         await query.answer("Старт")
-        await pipeline.start_youtube_download(user_id)
+        await pipeline.start_ytdlp_download(user_id)
         return
 
     await query.answer()
