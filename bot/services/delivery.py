@@ -12,6 +12,7 @@ from aiogram.types import FSInputFile
 import aiohttp
 
 from bot.config import Settings, get_settings
+from bot.services.usage_stats import UsageStats
 
 
 logger = logging.getLogger(__name__)
@@ -179,6 +180,9 @@ async def send_documents(
     chat_id: int,
     paths: list[Path],
     caption_prefix: str = "",
+    *,
+    usage_stats: UsageStats | None = None,
+    user_id: int | None = None,
 ) -> None:
     """Send files via local Bot API.
 
@@ -222,6 +226,8 @@ async def send_documents(
                 data = await resp.json(content_type=None)
 
             if data.get("ok"):
+                if usage_stats is not None and user_id is not None:
+                    await usage_stats.add_upload(user_id, size)
                 continue
 
             description = str(data.get("description", data))
@@ -246,6 +252,8 @@ async def send_documents(
                     "(TELEGRAM_LOCAL=True) и volume /downloads смонтирован в оба контейнера."
                 ) from exc
 
+            if usage_stats is not None and user_id is not None:
+                await usage_stats.add_upload(user_id, size)
 
 async def cleanup_paths(paths: list[Path]) -> None:
     for path in paths:

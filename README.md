@@ -29,7 +29,7 @@
 curl -fsSL https://get.docker.com | sh
 
 # Данные и проект
-mkdir -p /var/lib/torrent-bot/{downloads,bot-api,qbit-config,cookies}
+mkdir -p /var/lib/torrent-bot/{downloads,bot-api,qbit-config,cookies,bot-data}
 # скопируйте этот репозиторий, например:
 #   git clone <url> /opt/telegram-torrent-bot
 cd /opt/telegram-torrent-bot   # или путь к клону
@@ -104,7 +104,8 @@ chmod 600 /var/lib/torrent-bot/cookies/cookies.txt
 - После успешной отправки файлы с диска удаляются; «зависшее» — через 24 часа
 - Сидирование отключено (торрент удаляется из клиента после скачивания)
 - Большие файлы уходят в Telegram через `file://` (локальный Bot API), без HTTP-upload
-- Команды: `/start`, `/status`, `/cancel`, `/clean`
+- Статистика (`/stats`, только `ADMIN_USER_IDS`): накопительные ↓download / ↑upload; имена из `CLIENT_NAMES`; файл `$DATA_DIR/bot-data/usage_stats.json`
+- Команды: `/start`, `/status`, `/cancel`, `/clean`; админы (`ADMIN_USER_IDS`) — ещё `/stats`
 
 ## Переменные окружения
 
@@ -115,6 +116,9 @@ chmod 600 /var/lib/torrent-bot/cookies/cookies.txt
 | `BOT_TOKEN` | Токен BotFather |
 | `ALLOWED_USER_IDS` | Числовые Telegram id через запятую (`111,222`) |
 | `ALLOWED_USER_ID` | Устаревший одиночный id (всё ещё поддерживается) |
+| `ADMIN_USER_IDS` | Кто видит `/stats` (пусто — никто) |
+| `CLIENT_NAMES` | Имена для статистики: `111:Вася,222:Петя` |
+| `USAGE_STATS_PATH` | JSON со счётчиками (по умолчанию `/data/usage_stats.json` → `$DATA_DIR/bot-data/`) |
 | `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` | Для локального Bot API |
 | `QBITTORRENT_PASSWORD` | Пароль WebUI |
 | `DATA_DIR` | Каталог данных на хосте (по умолчанию `/var/lib/torrent-bot`) |

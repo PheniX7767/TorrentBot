@@ -5,9 +5,11 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 
 from bot.config import Settings
+from bot.services.delivery import format_size
 from bot.services.jobs import job_manager
 from bot.services.pipeline import Pipeline, force_clean_downloads
 from bot.services.qbittorrent import QBittorrentService
+from bot.services.usage_stats import UsageStats
 
 
 router = Router(name="commands")
@@ -19,22 +21,68 @@ def _uid(message: Message) -> int:
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message) -> None:
-    await message.answer(
-        "Привет! Я скачаю торрент или ссылку на видео/пост на VPS и пришлю файлы сюда.\n\n"
-        "Пришлите:\n"
-        "• <b>magnet</b>-ссылку или файл <code>.torrent</code>\n"
-        "• ссылку на видео или пост (YouTube, Instagram, TikTok и другие)\n\n"
-        "Команды:\n"
-        "/status — текущая задача\n"
-        "/cancel — отменить задачу\n"
+async def cmd_start(message: Message, settings: Settings) -> None:
+    lines = [
+        "Привет! Я скачаю торрент или ссылку на видео/пост на VPS и пришлю файлы сюда.\n",
+        "Пришлите:",
+        "• <b>magnet</b>-ссылку или файл <code>.torrent</code>",
+        "• ссылку на видео или пост (YouTube, Instagram, TikTok и другие)\n",
+        "Команды:",
+        "/status — текущая задача",
+        "/cancel — отменить задачу",
         "/clean — очистить загрузки на диске",
-    )
+    ]
+    if message.from_user and message.from_user.id in settings.admin_ids:
+        lines.append("/stats — статистика трафика")
+    await message.answer("\n".join(lines))
 
 
 @router.message(Command("status"))
 async def cmd_status(message: Message) -> None:
     await message.answer(job_manager.get(_uid(message)).summary())
+
+
+@router.message(Command("stats"))
+async def cmd_stats(
+    message: Message,
+    settings: Settings,
+    usage_stats: UsageStats,
+) -> None:
+    user_id = _uid(message)
+    if user_id not in settings.admin_ids:
+        await message.answer("Нет доступа.")
+        return
+
+    snapshot = await usage_stats.snapshot()
+    names = settings.client_name_map
+    rows: list[tuple[int, int, int, str]] = []
+    for uid in settings.allowed_ids:
+        counters = snapshot.get(uid)
+        download = counters.download if counters else 0
+        upload = counters.upload if counters else 0
+        if uid in names:
+            label = f"{names[uid]} (<code>{uid}</code>)"
+        else:
+            label = f"<code>{uid}</code>"
+        rows.append((download + upload, download, upload, label))
+
+    rows.sort(key=lambda r: r[0], reverse=True)
+
+    lines = ["<b>Статистика трафика</b>", ""]
+    total_dl = 0
+    total_ul = 0
+    for _total, download, upload, label in rows:
+        total_dl += download
+        total_ul += upload
+        lines.append(
+            f"{label}\n"
+            f"  ↓ {format_size(download)}  ↑ {format_size(upload)}"
+        )
+    lines.append("")
+    lines.append(
+        f"<b>Итого</b>: ↓ {format_size(total_dl)}  ↑ {format_size(total_ul)}"
+    )
+    await message.answer("\n".join(lines))
 
 
 @router.message(Command("cancel"))

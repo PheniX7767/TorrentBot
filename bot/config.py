@@ -34,6 +34,34 @@ def parse_user_ids(*raw_values: object) -> frozenset[int]:
     return frozenset(ids)
 
 
+def parse_client_names(raw: object) -> dict[int, str]:
+    """Parse CLIENT_NAMES=111:Вася,222:Петя into a map."""
+    if raw is None:
+        return {}
+    text = str(raw).strip().strip("\"'")
+    if not text:
+        return {}
+    result: dict[int, str] = {}
+    for part in text.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" not in part:
+            logger.warning("Skipping invalid CLIENT_NAMES token: %r", part)
+            continue
+        id_text, name = part.split(":", 1)
+        id_text = id_text.strip()
+        name = name.strip()
+        if not id_text or not name:
+            logger.warning("Skipping invalid CLIENT_NAMES token: %r", part)
+            continue
+        try:
+            result[int(id_text)] = name
+        except ValueError:
+            logger.warning("Skipping invalid CLIENT_NAMES token: %r", part)
+    return result
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -46,6 +74,10 @@ class Settings(BaseSettings):
     allowed_user_ids: str = ""
     # Also accepts a single id OR a comma-separated list (common mistake).
     allowed_user_id: str | None = None
+    # Who can view /stats (empty = nobody).
+    admin_user_ids: str = ""
+    # Friendly names: CLIENT_NAMES=111:Вася,222:Петя
+    client_names: str = ""
 
     telegram_api_id: int | None = None
     telegram_api_hash: str | None = None
@@ -60,6 +92,7 @@ class Settings(BaseSettings):
     puid: int = 1000
     pgid: int = 1000
     ytdlp_cookies_file: str = "/cookies/cookies.txt"
+    usage_stats_path: str = "/data/usage_stats.json"
 
     max_selected_bytes: int = 20 * 1024**3
     min_free_bytes: int = 2 * 1024**3
@@ -67,7 +100,13 @@ class Settings(BaseSettings):
     stale_job_hours: int = 24
     progress_edit_seconds: int = 20
 
-    @field_validator("allowed_user_id", "allowed_user_ids", mode="before")
+    @field_validator(
+        "allowed_user_id",
+        "allowed_user_ids",
+        "admin_user_ids",
+        "client_names",
+        mode="before",
+    )
     @classmethod
     def _normalize_id_fields(cls, value: object) -> str:
         if value is None:
@@ -85,6 +124,14 @@ class Settings(BaseSettings):
     @property
     def allowed_ids(self) -> frozenset[int]:
         return parse_user_ids(self.allowed_user_ids, self.allowed_user_id)
+
+    @property
+    def admin_ids(self) -> frozenset[int]:
+        return parse_user_ids(self.admin_user_ids)
+
+    @property
+    def client_name_map(self) -> dict[int, str]:
+        return parse_client_names(self.client_names)
 
     @property
     def bot_api_url(self) -> str:

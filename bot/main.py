@@ -15,6 +15,7 @@ from bot.handlers import setup_routers
 from bot.middlewares.acl import AllowlistMiddleware
 from bot.services.pipeline import Pipeline, ensure_writable_dir
 from bot.services.qbittorrent import QBittorrentService
+from bot.services.usage_stats import UsageStats
 
 
 logging.basicConfig(
@@ -65,7 +66,13 @@ async def main() -> None:
     qbit = QBittorrentService(settings)
     await wait_qbit(qbit)
 
-    pipeline = Pipeline(bot=bot, settings=settings, qbit=qbit)
+    usage_stats = UsageStats(settings.usage_stats_path)
+    pipeline = Pipeline(
+        bot=bot,
+        settings=settings,
+        qbit=qbit,
+        usage_stats=usage_stats,
+    )
     pipeline.start_background()
 
     dp = Dispatcher()
@@ -87,6 +94,7 @@ async def main() -> None:
             settings=settings,
             qbit=qbit,
             pipeline=pipeline,
+            usage_stats=usage_stats,
             allowed_updates=dp.resolve_used_update_types(),
         )
     finally:

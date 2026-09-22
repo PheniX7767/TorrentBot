@@ -21,6 +21,7 @@ from bot.services.delivery import (
 )
 from bot.services.jobs import JobState, job_manager
 from bot.services.qbittorrent import QBittorrentService
+from bot.services.usage_stats import UsageStats
 from bot.services.ytdlp import YtdlpCancelled, download_media
 
 
@@ -33,10 +34,12 @@ class Pipeline:
         bot: Bot,
         settings: Settings,
         qbit: QBittorrentService,
+        usage_stats: UsageStats,
     ) -> None:
         self.bot = bot
         self.settings = settings
         self.qbit = qbit
+        self.usage_stats = usage_stats
         self._download_tasks: dict[int, asyncio.Task] = {}
         self._cancel_events: dict[int, asyncio.Event] = {}
         self._gc_task: asyncio.Task | None = None
@@ -175,6 +178,9 @@ class Pipeline:
             await asyncio.to_thread(self.qbit.delete_torrent, torrent_hash, False)
             job.torrent_hash = None
 
+            download_bytes = sum(p.stat().st_size for p in paths if p.exists())
+            await self.usage_stats.add_download(user_id, download_bytes)
+
             job.state = JobState.DELIVERING
             job.touch()
 
@@ -192,6 +198,8 @@ class Pipeline:
                 chat_id,
                 sendables,
                 caption_prefix=job.torrent_name[:100] if job.torrent_name else "",
+                usage_stats=self.usage_stats,
+                user_id=user_id,
             )
 
             await cleanup_paths(sendables)
@@ -299,6 +307,8 @@ class Pipeline:
             if err:
                 raise RuntimeError(err)
 
+            await self.usage_stats.add_download(user_id, total_size)
+
             await self._safe_edit(
                 chat_id,
                 job.progress_message_id,
@@ -321,6 +331,8 @@ class Pipeline:
                 chat_id,
                 sendables,
                 caption_prefix=job.torrent_name[:100] if job.torrent_name else "",
+                usage_stats=self.usage_stats,
+                user_id=user_id,
             )
 
             await cleanup_paths(sendables)

@@ -41,3 +41,4 @@ services:
     volumes:
       - ${DATA_DIR:-/var/lib/torrent-bot}/downloads:/downloads
       - ${DATA_DIR:-/var/lib/torrent-bot}/cookies:/cookies:ro
+      - ${DATA_DIR:-/var/lib/torrent-bot}/bot-data:/data
